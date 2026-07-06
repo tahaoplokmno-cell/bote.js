@@ -60,9 +60,6 @@ def update_balance(user_id, amount):
     db["users"][uid]["balance_usd"] = db["users"][uid].get("balance_usd", 0) + amount
     save_db(db)
 
-def is_admin(user_id):
-    return str(user_id) == ADMIN_ID
-
 # ==================== القوائم الرئيسية ====================
 main_menu = ReplyKeyboardMarkup([
     ['🏪 المتجر', '🤖 إنشاء بوت'],
@@ -78,10 +75,11 @@ store_menu = InlineKeyboardMarkup([
     [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
 ])
 
+# ✅ تم إصلاح أسماء الأزرار لتطابق مفاتيح القاموس بالضبط (مع الإيموجي)
 games_menu = InlineKeyboardMarkup([
-    [InlineKeyboardButton("🎮 ببجي موبايل", callback_data="game#ببجي موبايل")],
-    [InlineKeyboardButton("🔥 فري فاير", callback_data="game#فري فاير")],
-    [InlineKeyboardButton("🎮 روبلوكس", callback_data="game#روبلوكس")],
+    [InlineKeyboardButton("🎮 ببجي موبايل", callback_data="game#🎮 ببجي موبايل")],
+    [InlineKeyboardButton("🔥 فري فاير", callback_data="game#🔥 فري فاير")],
+    [InlineKeyboardButton("🎮 روبلوكس", callback_data="game#🎮 روبلوكس")],
     [InlineKeyboardButton("🔙 رجوع للمتجر", callback_data="store#back")],
     [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
 ])
@@ -100,6 +98,7 @@ phone_menu = InlineKeyboardMarkup([
     [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
 ])
 
+# ==================== قوائم المحفظة والاسترجاع ====================
 wallet_menu = InlineKeyboardMarkup([
     [InlineKeyboardButton("💵 شحن بالدولار", callback_data="charge#usd")],
     [InlineKeyboardButton("🇸🇾 شحن بالليرة", callback_data="charge#syr")],
@@ -112,7 +111,7 @@ refund_menu = InlineKeyboardMarkup([
     [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
 ])
 
-# ==================== لوحة التحكم الإدارية الضخمة ====================
+# ==================== لوحة التحكم الإدارية (ضخمة) ====================
 admin_panel = InlineKeyboardMarkup([
     [InlineKeyboardButton("📊 الإحصائيات", callback_data="adm#stats")],
     [InlineKeyboardButton("📢 إرسال إعلان", callback_data="adm#broadcast")],
@@ -687,9 +686,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ============================================================
     # ==================== العودة للقائمة الرئيسية ============
+    # ✅ تم إصلاحها: لا يمكن استخدام edit_message_text مع ReplyKeyboardMarkup
     # ============================================================
     elif data == "main_menu":
-        await query.edit_message_text("🎯 **القائمة الرئيسية**\nاختر الخيار المناسب:", reply_markup=main_menu, parse_mode='Markdown')
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="🎯 **القائمة الرئيسية**\nاختر الخيار المناسب:",
+            reply_markup=main_menu,
+            parse_mode='Markdown'
+        )
 
     else:
         await query.edit_message_text("⚠️ هذا الزر غير مفعل حالياً.")
