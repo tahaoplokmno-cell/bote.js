@@ -25,11 +25,12 @@ def load_db():
             "banned": {},
             "muted": {},
             "exchange_rate": 14500,
+            "admin_notes": "",
+            "bot_maintenance": False,
             "orders": [],
             "bot_orders": [],
             "installments": [],
-            "admin_notes": "",
-            "bot_maintenance": False,
+            "products": [],
             "custom_store": {
                 "games": {
                     "🎮 ببجي موبايل": ["60 شدة - 1.20$", "325 شدة - 5.00$", "660 شدة - 10.00$", "1800 شدة - 25.00$"],
@@ -61,16 +62,16 @@ def update_balance(user_id, amount):
 
 # ==================== القوائم الرئيسية ====================
 main_menu = ReplyKeyboardMarkup([
-    ['🏪 المتجر'],
+    ['🏪 المتجر', '🤖 إنشاء بوت'],
     ['💳 المحفظة', '💰 استرجاع الأموال'],
     ['⚙️ الإعدادات', '📞 الدعم الفني']
 ], resize_keyboard=True)
 
+# ==================== قوائم المتجر ====================
 store_menu = InlineKeyboardMarkup([
     [InlineKeyboardButton("🎮 قسم الألعاب", callback_data="store#games")],
     [InlineKeyboardButton("🎟️ قسم البطاقات", callback_data="store#cards")],
     [InlineKeyboardButton("📱 شحن رصيد هاتف", callback_data="store#phone")],
-    [InlineKeyboardButton("🤖 إنشاء بوت", callback_data="bot_order#start")],
     [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
 ])
 
@@ -96,6 +97,7 @@ phone_menu = InlineKeyboardMarkup([
     [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
 ])
 
+# ==================== قوائم المحفظة والاسترجاع ====================
 wallet_menu = InlineKeyboardMarkup([
     [InlineKeyboardButton("💵 شحن بالدولار", callback_data="charge#usd")],
     [InlineKeyboardButton("🇸🇾 شحن بالليرة", callback_data="charge#syr")],
@@ -108,13 +110,18 @@ refund_menu = InlineKeyboardMarkup([
     [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
 ])
 
+# ==================== لوحة التحكم الإدارية (ضخمة) ====================
 admin_panel = InlineKeyboardMarkup([
     [InlineKeyboardButton("📊 الإحصائيات", callback_data="adm#stats")],
     [InlineKeyboardButton("📢 إرسال إعلان", callback_data="adm#broadcast")],
     [InlineKeyboardButton("💰 إدارة المحفظة", callback_data="adm#wallet")],
     [InlineKeyboardButton("👥 المستخدمين", callback_data="adm#users")],
-    [InlineKeyboardButton("🎮 إدارة المتجر", callback_data="adm#store")],
-    [InlineKeyboardButton("⚙️ الإعدادات العامة", callback_data="adm#settings")],
+    [InlineKeyboardButton("🛒 إدارة المتجر", callback_data="adm#store")],
+    [InlineKeyboardButton("📱 إدارة الهاتف", callback_data="adm#phone")],
+    [InlineKeyboardButton("🤖 طلبات البوتات", callback_data="adm#bot_orders")],
+    [InlineKeyboardButton("⚙️ الإعدادات", callback_data="adm#settings")],
+    [InlineKeyboardButton("🗑️ تنظيف البيانات", callback_data="adm#clean")],
+    [InlineKeyboardButton("💾 نسخة احتياطية", callback_data="adm#backup")],
     [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="main_menu")]
 ])
 
@@ -377,12 +384,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             total_users = len(db["users"])
             total_balance = sum(u.get("balance_usd", 0) for u in db["users"].values())
             total_orders = len(db.get("orders", []))
+            total_bot_orders = len(db.get("bot_orders", []))
             await query.edit_message_text(
                 f"📊 **الإحصائيات**\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"👥 المستخدمين: {total_users}\n"
                 f"💰 إجمالي الرصيد: ${total_balance:.2f}\n"
-                f"📦 الطلبات: {total_orders}",
+                f"📦 الطلبات: {total_orders}\n"
+                f"🤖 طلبات البوتات: {total_bot_orders}\n"
+                f"📈 متوسط الرصيد: ${(total_balance / (total_users or 1)):.2f}",
                 parse_mode='Markdown'
             )
 
@@ -431,6 +441,28 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 store_info += f"  📂 {name} ({len(cards[name])} منتج)\n"
             await query.edit_message_text(store_info, parse_mode='Markdown')
 
+        elif action == "phone":
+            await query.edit_message_text(
+                "📱 **إدارة شحن الهاتف**\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "اختر الإجراء:",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📊 عرض طلبات الشحن", callback_data="adm#view_phone_orders")],
+                    [InlineKeyboardButton("🔙 رجوع", callback_data="adm#back")]
+                ]),
+                parse_mode='Markdown'
+            )
+
+        elif action == "bot_orders":
+            bot_orders = db.get("bot_orders", [])
+            if not bot_orders:
+                await query.edit_message_text("🤖 لا توجد طلبات بوتات حالياً.")
+            else:
+                orders_list = "🤖 **طلبات البوتات**\n━━━━━━━━━━━━━━━━━━━━\n"
+                for i, order in enumerate(bot_orders[:10], 1):
+                    orders_list += f"{i}. {order.get('user_name', 'مجهول')} - {order.get('server', 'غير محدد')}\n"
+                await query.edit_message_text(orders_list, parse_mode='Markdown')
+
         elif action == "settings":
             rate = db.get('exchange_rate', 14500)
             maintenance = "🛑 معطل" if db.get('bot_maintenance', False) else "✅ شغال"
@@ -438,8 +470,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⚙️ **الإعدادات العامة**\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
                 f"📈 سعر الصرف: 1$ = {rate:,} ل.س\n"
-                f"⚙️ حالة البوت: {maintenance}",
+                f"⚙️ حالة البوت: {maintenance}\n"
+                f"📝 ملاحظات الأدمن: {db.get('admin_notes', 'لا توجد ملاحظات')}",
                 parse_mode='Markdown'
+            )
+
+        elif action == "clean":
+            db["orders"] = []
+            db["bot_orders"] = []
+            save_db(db)
+            await query.edit_message_text("🧹 تم تنظيف جميع الطلبات والبيانات المؤقتة.")
+
+        elif action == "backup":
+            backup_data = json.dumps(db, indent=2, ensure_ascii=False)
+            await query.edit_message_text("💾 تم إنشاء نسخة احتياطية من قاعدة البيانات.")
+            await context.bot.send_document(
+                chat_id=user_id,
+                document=('database_backup.json', backup_data.encode('utf-8')),
+                caption="📂 نسخة احتياطية من قاعدة البيانات"
             )
 
         elif action == "back":
@@ -502,7 +550,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ============================================================
     elif data.startswith("buy#"):
         parts = data.split('#')
-        item_type = parts[1]  # game or card
+        item_type = parts[1]
         name = parts[2]
         item = parts[3]
         price = float(parts[4])
