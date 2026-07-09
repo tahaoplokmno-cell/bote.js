@@ -251,6 +251,7 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.effective_chat.id) == ADMIN_CHANNEL_ID:
         await notify_admin_dm(context,"⚠️ **انتبه:** كتبت رداً داخل القناة نفسها ولن يصل للزبون!\nالرجاء الرد **هنا في هذه المحادثة الخاصة معي** وليس داخل القناة.")
+
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return
     user_id = str(update.effective_user.id); text = update.message.text; db = load_db(); ud = context.user_data
@@ -276,23 +277,32 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == '⚙️ الإعدادات': await update.message.reply_text(f"⚙️ **الإعدادات**\n👤 {safe_md(update.effective_user.first_name or 'مستخدم')}\n🆔 `{user_id}`"); return
     if text == '📞 الدعم الفني':
         await update.message.reply_text(
-    f"📞 **الدعم الفني**\nللتواصل المباشر: {DEVELOPER_USERNAME}\nأو أرسل شكواك/استفسارك مباشرة من هنا:",
-    reply_markup=support_menu
-)
-return
+            f"📞 **الدعم الفني**\nللتواصل المباشر: {DEVELOPER_USERNAME}\nأو أرسل شكواك/استفسارك مباشرة من هنا:",
+            reply_markup=support_menu
+        )
+        return
+
     if ud.get('awaiting_password'):
         ud['awaiting_password']=False
         if text.strip()==ADMIN_PASSWORD:
             if user_id not in db['authenticated_admins']: db['authenticated_admins'].append(user_id); save_db(db)
-            await update.message.reply_text("✅ تم التحقق نهائياً! استخدم /panel للوحة التحكم في أي وقت لاحقاً بدون كلمة سر."); return
-        else: await update.message.reply_text("❌ كلمة سر خاطئة!"); return
+            await update.message.reply_text("✅ تم التحقق نهائياً! استخدم /panel للوحة التحكم في أي وقت لاحقاً بدون كلمة سر.")
+            return
+        else:
+            await update.message.reply_text("❌ كلمة سر خاطئة!")
+            return
 
     if ud.get('awaiting_complaint'):
-        ud['awaiting_complaint']=False; db['stats']['complaints']+=1; log_activity(db,f"شكوى جديدة من {user_id}"); save_db(db)
+        ud['awaiting_complaint'] = False
+        db['stats']['complaints'] += 1
+        log_activity(db, f"شكوى جديدة من {user_id}")
+        save_db(db)
         try:
-            await context.bot.send_message(ADMIN_CHANNEL_ID,f"📩 **شكوى / استفسار جديد**\n━━━━━━━━━━━━━━━━━━━━\n👤 {safe_md(update.effective_user.first_name or 'مستخدم')}\n🆔 {user_id}\n\n📝 {safe_md(text)}",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↩️ الرد على الزبون",callback_data=f"reply_user#{user_id}")]]))
+            await context.bot.send_message(ADMIN_CHANNEL_ID, f"📩 **شكوى / استفسار جديد**\n━━━━━━━━━━━━━━━━━━━━\n👤 {safe_md(update.effective_user.first_name or 'مستخدم')}\n🆔 {user_id}\n\n📝 {safe_md(text)}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↩️ الرد على الزبون", callback_data=f"reply_user#{user_id}")]]))
             await update.message.reply_text("✅ تم استلام رسالتك وسيتم الرد عليك بأقرب وقت ممكن 🙏")
-        except: await update.message.reply_text("✅ تم استلام رسالتك وسيتم الرد عليك بأقرب وقت ممكن 🙏"); return
+        except:
+            await update.message.reply_text("✅ تم استلام رسالتك وسيتم الرد عليك بأقرب وقت ممكن 🙏")
+        return
 
     if ud.get('awaiting_reply_to_user'):
         target_id=ud.get('reply_target_id'); ud['awaiting_reply_to_user']=False
@@ -538,7 +548,6 @@ async def handle_photo_and_document(update: Update, context: ContextTypes.DEFAUL
         await context.bot.send_document(target_id,update.message.document.file_id,caption="📂 تفضل ملف البوت الخاص بك جاهزاً!")
         await update.message.reply_text(f"✅ تم إرسال الملف إلى {target_id} وتم حفظه لطلب `{order_id}` لإعادة الإرسال لاحقاً."); return
 
-
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query=update.callback_query; await query.answer(); data=query.data; user_id=str(update.effective_user.id); db=load_db(); ud=context.user_data
 
@@ -598,7 +607,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if not node: return
                     flag=""
                     if node.get('deleted'): flag=" 🗑️محذوف"
-                    elif node['type']=='product' and not node.get('active',True): flag=" ⛔معطّل"
+                    elif node['type']=='product' and not node.get('active',True): flag="  ⛔معطّل"
                     price_txt=f" | {node['price']}$" if node.get('price') is not None else ""
                     lines.append(("  "*depth)+f"`{nid}` {safe_md(node['name'])}{price_txt}{flag}")
                     for c in node.get('children',[]): walk(c,depth+1)
@@ -619,7 +628,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if action=="clean": db["pending_orders"]={}; save_db(db); await query.edit_message_text("🧹 تم تنظيف كل الطلبات المعلقة."); return
         if action=="search_bot_order": clear_awaiting(ud); ud['awaiting_search_bot_order']=True; await query.edit_message_text("✍️ اكتب رقم طلب البوت (order_id) أو آيدي الزبون للبحث عنه:",reply_markup=CANCEL_BTN); return
         if action=="toggle_maintenance": db['bot_maintenance']=not db.get('bot_maintenance',False); save_db(db); state="مفعّل 🛠️" if db['bot_maintenance'] else "متوقف ✅"; await query.edit_message_text(f"وضع الصيانة الآن: {state}\n(عند التفعيل، الزبائن العاديون لا يستطيعون استخدام البوت وتظهر لهم رسالة صيانة)."); return
-        if action=="admin_notes": clear_awaiting(ud); ud['awaiting_admin_notes']=True; current=db.get('admin_notes','') or 'لا توجد ملاحظات بعد.'; await query.edit_message_text(f"📝 **الملاحظات الحالية:**\n{safe_md(current)}\n\n✍️ اكتب ملاحظات جديدة لتحديثها:",reply_markup=CANCEL_BTN); return
+        if action=="admin_notes": clear_awaiting(ud); ud['awaiting_admin_notes']=True; current=db.get('admin_notes','') or 'لا توجد ملاحظات بعد.'; await query.edit_message_text(f" 📝 **الملاحظات الحالية:**\n{safe_md(current)}\n\n✍️ اكتب ملاحظات جديدة لتحديثها:",reply_markup=CANCEL_BTN); return
         if action=="list_admins":
             admins=db.get('authenticated_admins',[]); lines=["👮 **الأدمنية المصادقين:**\n━━━━━━━━━━━━━━━━━━━━"]
             for a in admins: name=safe_md(db['users'].get(a,{}).get('name','غير معروف')); lines.append(f"`{a}` — {name}")
@@ -654,7 +663,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data=="echo#buttons":
         if not is_admin(db,user_id): await query.edit_message_text("❌ غير مصرح."); return
-        await query.edit_message_text("🔘 **إدارة الأزرار**\n\nالأزرار الحالية:\n🏪 المتجر | 🤖 إنشاء بوت\n💳 المحفظة | 💰 استرجاع الأموال\n⚙️ الإعدادات | 📞 الدعم الفني\n\nللتعديل استخدم /panel ثم إدارة المتجر",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 رجوع للإعدادات",callback_data="echo#main")]])); return
+        await query.edit_message_text("🔘 **إدارة الأزرار**\n\nالأزرار الحالية:\n🏪 المتجر | 🤖 إنشاء بوت\n💳 المحفظة | 💰 استرجاع الأموال\n⚙️ الإعدادات | 📞 الدعم الفني\n\nللتعديل استخدم /panel ثم إدارة المتجر",reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(" 🔙 رجوع للإعدادات",callback_data="echo#main")]])); return
 
     if data=="echo#payment":
         if not is_admin(db,user_id): await query.edit_message_text("❌ غير مصرح."); return
@@ -870,8 +879,5 @@ def main():
     print("🚀 البوت شغال بالبايثون!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
-
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
-
-ارجوك لا لاتخرب ي شفر التو كن ةالشياء الي ممكن تنسرق وخلي عند إنشاء قسم في مزايا انو ماذا يكتب له بل وصف او منتج أيضا وحط مثلا كك زر تاكيد وماذا يوصلني وهكذا فهمت.
